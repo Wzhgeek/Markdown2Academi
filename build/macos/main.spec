@@ -4,6 +4,11 @@ import os
 
 block_cipher = None
 
+import platform
+
+# Get target architecture from environment or current arch
+target_arch = os.environ.get('TARGET_ARCH', platform.machine())
+
 a = Analysis(
     ['../../main.py'],
     pathex=['../../src'],
@@ -24,9 +29,12 @@ a = Analysis(
         'src.converters.latex_exporter',
         'src.converters.table_converter',
         'src.utils.config',
-        'cairosvg',
         'PIL',
         'PIL._tkinter_finder',
+        'tkinter',
+        'tkinter.filedialog',
+        'tkinter.messagebox',
+        'tkinter.ttk',
     ],
     hookspath=[],
     hooksconfig={},

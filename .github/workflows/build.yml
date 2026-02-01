@@ -29,19 +29,21 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "Markdown2Academia" --add-data "src;src" main.py
+          cd build/windows
+          pyinstaller --noconfirm main.spec
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-executable
-          path: dist/Markdown2Academia.exe
+          path: build/windows/dist/Markdown2Academia.exe
+          if-no-files-found: warn
 
       - name: Create Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/Markdown2Academia.exe
+          files: build/windows/dist/Markdown2Academia.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -68,32 +70,32 @@ jobs:
           pip install pyinstaller
 
       - name: Build executable
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "Markdown2Academia" --target-arch ${{ matrix.arch }} main.py
+          cd build/macos
+          pyinstaller --noconfirm main.spec
 
       - name: Create .app bundle
         run: |
-          mkdir -p Markdown2Academia.app/Contents/MacOS
-          mkdir -p Markdown2Academia.app/Contents/Resources
-          cp dist/Markdown2Academia Markdown2Academia.app/Contents/MacOS/
-          echo '<?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>Markdown2Academia</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.markdown2academia.app</string>
-              <key>CFBundleName</key>
-              <string>Markdown2Academia</string>
-              <key>CFBundleVersion</key>
-              <string>1.0.0</string>
-          </dict>
-          </plist>' > Markdown2Academia.app/Contents/Info.plist
+          cd build/macos
+          # PyInstaller already created the .app bundle via BUNDLE in spec
+          ls -la dist/
+          # Rename if needed for arch
+          if [ "${{ matrix.arch }}" = "arm64" ] && [ -d "dist/Markdown2Academia.app" ]; then
+            mv dist/Markdown2Academia.app dist/Markdown2Academia-arm64.app
+          elif [ "${{ matrix.arch }}" = "x86_64" ] && [ -d "dist/Markdown2Academia.app" ]; then
+            mv dist/Markdown2Academia.app dist/Markdown2Academia-x86_64.app
+          fi
 
       - name: Create DMG
         run: |
           brew install create-dmg || true
+          cd build/macos
+          APP_NAME="Markdown2Academia-${{ matrix.arch }}.app"
+          if [ -d "dist/Markdown2Academia.app" ]; then
+            mv dist/Markdown2Academia.app "dist/$APP_NAME"
+          fi
           create-dmg \
             --volname "Markdown2Academia" \
             --window-pos 200 120 \
@@ -101,7 +103,7 @@ jobs:
             --icon-size 100 \
             --app-drop-link 450 185 \
             "Markdown2Academia-${{ matrix.arch }}.dmg" \
-            Markdown2Academia.app/
+            "dist/$APP_NAME" || echo "DMG creation failed, will upload .app directly"
         continue-on-error: true
 
       - name: Upload artifact
@@ -109,16 +111,17 @@ jobs:
         with:
           name: macos-${{ matrix.arch }}-bundle
           path: |
-            dist/Markdown2Academia
-            Markdown2Academia-*.dmg
+            build/macos/dist/Markdown2Academia*.app/**/**
+            build/macos/Markdown2Academia-*.dmg
+          if-no-files-found: warn
 
       - name: Create Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/Markdown2Academia
-            Markdown2Academia-*.dmg
+            build/macos/dist/Markdown2Academia*.app
+            build/macos/Markdown2Academia-*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -161,22 +164,31 @@ jobs:
       - name: Build Android APK
         run: |
           cd build/android
-          buildozer android debug || echo "Buildozer build may need local debugging"
-        continue-on-error: true
+          buildozer android debug
+
+      - name: Find and upload APK
+        run: |
+          # Find APK file
+          find . -name "*.apk" -type f
+          # Create bin directory if not exists
+          mkdir -p bin
+          # Copy APK to bin directory
+          find . -name "*.apk" -type f -exec cp {} bin/ \;
+          ls -la bin/
+        working-directory: build/android
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: build/android/bin/*.apk
-        continue-on-error: true
+          if-no-files-found: warn
 
       - name: Create Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: build/android/bin/*.apk
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
