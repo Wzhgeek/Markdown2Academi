@@ -11,11 +11,15 @@ import os
 import sys
 from typing import Dict, Tuple, Optional, Union
 
-# 尝试导入 CairoSVG，如果不存在则使用 PNG 回退
+# 尝试导入 CairoSVG，如果不存在或系统库缺失则使用 PNG 回退
 try:
     import cairosvg
+    # 测试是否能正常初始化
+    cairosvg.svg2png(bytestring=b'<svg/>')
     CAIROSVG_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError, Exception) as e:
+    print(f"[IconManager] CairoSVG 不可用: {e}")
+    print("[IconManager] 将使用 PNG 图标或 emoji 回退")
     CAIROSVG_AVAILABLE = False
 
 
