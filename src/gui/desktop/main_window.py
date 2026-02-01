@@ -9,6 +9,8 @@ import threading
 
 from src.converters.markdown_to_docx import MarkdownToDocxConverter
 from src.converters.formula_converter import FormulaConverter
+from src.converters.latex_exporter import LatexExporter
+from src.gui.desktop.preview_panel import PreviewPanel
 from src.utils.config import Config
 
 
@@ -26,6 +28,7 @@ class MainWindow:
 
         # 转换器
         self.docx_converter = MarkdownToDocxConverter()
+        self.latex_exporter = LatexExporter()
         self.formula_converter = FormulaConverter(self.config.get('mathpix_app_id', ''),
                                                    self.config.get('mathpix_app_key', ''))
 
@@ -84,10 +87,10 @@ class MainWindow:
         preview_frame.columnconfigure(0, weight=1)
         preview_frame.rowconfigure(0, weight=1)
 
-        self.preview_text = scrolledtext.ScrolledText(preview_frame, wrap=tk.WORD, height=20)
-        self.preview_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        self.preview_text.insert(tk.END, "请选择或拖拽 Markdown 文件...")
-        self.preview_text.config(state=tk.DISABLED)
+        # 使用新的预览面板
+        self.preview_panel = PreviewPanel(preview_frame)
+        self.preview_panel.frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.preview_panel.update_preview("请选择或拖拽 Markdown 文件...")
 
         # ===== 按钮区域 =====
         button_frame = ttk.Frame(main_frame)
@@ -105,9 +108,8 @@ class MainWindow:
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
 
-        # 绑定拖拽事件
-        self.root.drop_target_register("DND_Files")
-        self.root.dnd_bind("<<Drop>>", self._on_drop)
+        # 绑定拖拽事件（可选）
+        self._setup_drag_drop()
 
     def _setup_menu(self):
         """设置菜单栏"""
@@ -142,6 +144,17 @@ class MainWindow:
         self.root.bind("<Control-o>", lambda e: self._browse_file())
         self.root.bind("<Control-n>", lambda e: self._new_file())
         self.root.bind("<Control-e>", lambda e: self._export_document())
+
+    def _setup_drag_drop(self):
+        """设置拖拽功能（可选，需要 tkinterdnd2）"""
+        try:
+            # 尝试导入 tkinterdnd2
+            from tkinterdnd2 import TkinterDnD, DND_FILES
+            self.root.drop_target_register(DND_FILES)
+            self.root.dnd_bind('<<Drop>>', self._on_drop)
+        except ImportError:
+            # tkinterdnd2 未安装，显示普通提示
+            pass
 
     def _browse_file(self):
         """浏览文件"""
@@ -191,10 +204,7 @@ English abstract here...
 # 参考文献
 
 """
-        self.preview_text.config(state=tk.NORMAL)
-        self.preview_text.delete(1.0, tk.END)
-        self.preview_text.insert(tk.END, template)
-        self.preview_text.config(state=tk.NORMAL)
+        self.preview_panel.update_preview(template)
         self.current_file = None
         self.file_entry.delete(0, tk.END)
         self.status_var.set("新建文件 - 请保存后导出")
@@ -213,38 +223,33 @@ English abstract here...
     def _refresh_preview(self):
         """刷新预览"""
         if not self.current_file:
-            content = self.preview_text.get(1.0, tk.END)
-            if content.strip() and content.strip() != "请选择或拖拽 Markdown 文件...":
-                self.preview_text.config(state=tk.NORMAL)
             return
 
         try:
             with open(self.current_file, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            self.preview_text.config(state=tk.NORMAL)
-            self.preview_text.delete(1.0, tk.END)
-            self.preview_text.insert(tk.END, content)
-            self.preview_text.config(state=tk.DISABLED)
+            # 使用新的预览面板
+            template = self.template_var.get()
+            self.preview_panel.update_preview(content, template)
         except Exception as e:
             messagebox.showerror("错误", f"无法读取文件: {e}")
 
     def _export_document(self):
         """导出文档"""
-        if not self.current_file:
-            # 检查预览区是否有内容
-            content = self.preview_text.get(1.0, tk.END)
-            if not content.strip() or content.strip() == "请选择或拖拽 Markdown 文件...":
-                messagebox.showwarning("提示", "请先打开或创建一个 Markdown 文件")
+        # 获取 Markdown 内容
+        md_content = None
+        if self.current_file and os.path.exists(self.current_file):
+            try:
+                with open(self.current_file, 'r', encoding='utf-8') as f:
+                    md_content = f.read()
+            except Exception as e:
+                messagebox.showerror("错误", f"无法读取文件: {e}")
                 return
 
-            # 保存临时文件
-            temp_file = os.path.join(os.path.expanduser("~"), ".markdown2academia_temp.md")
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(content)
-            input_file = temp_file
-        else:
-            input_file = self.current_file
+        if not md_content:
+            messagebox.showwarning("提示", "请先打开或创建一个 Markdown 文件")
+            return
 
         # 选择输出路径
         output_format = self.output_format.get()
@@ -266,17 +271,33 @@ English abstract here...
         # 异步转换
         self.status_var.set("正在转换...")
         threading.Thread(target=self._do_export,
-                         args=(input_file, output_file, output_format),
+                         args=(md_content, output_file, output_format),
                          daemon=True).start()
 
-    def _do_export(self, input_file, output_file, output_format):
+    def _do_export(self, md_content, output_file, output_format):
         """执行导出"""
         try:
             template = self.template_var.get()
-            self.docx_converter.convert(input_file, output_file, template=template)
+
+            if output_format == "latex":
+                # 使用 LaTeX 导出器
+                self.latex_exporter.export(md_content, output_file, template=template)
+            else:
+                # Word/PDF 导出（通过 Pandoc）
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+                    f.write(md_content)
+                    temp_md = f.name
+                try:
+                    self.docx_converter.convert(temp_md, output_file, template=template)
+                finally:
+                    import os
+                    os.unlink(temp_md)
+
             self.root.after(0, lambda: self._export_complete(output_file))
         except Exception as e:
-            self.root.after(0, lambda: self._export_error(str(e)))
+            error_msg = str(e)
+            self.root.after(0, lambda msg=error_msg: self._export_error(msg))
 
     def _export_complete(self, output_file):
         """导出完成"""
@@ -315,7 +336,8 @@ English abstract here...
 
     def _open_table_tool(self):
         """打开表格转换工具"""
-        messagebox.showinfo("提示", "表格转换功能开发中...")
+        from src.gui.desktop.table_editor import TableEditor
+        TableEditor(self.root, None)
 
     def _show_help(self):
         """显示帮助"""

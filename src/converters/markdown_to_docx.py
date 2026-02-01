@@ -78,11 +78,12 @@ class MarkdownToDocxConverter:
                 '-o', output_file,
                 '--from', 'markdown+yaml_metadata_block+citations',
                 '--to', 'docx',
-                '--reference-doc=default',
+                '--standalone',
             ]
-            subprocess.run(cmd, check=True, capture_output=True)
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Pandoc 转换失败: {e.stderr.decode()}")
+            error_msg = e.stderr if e.stderr else "未知错误"
+            raise RuntimeError(f"Pandoc 转换失败: {error_msg}")
         except FileNotFoundError:
             raise RuntimeError("未找到 pandoc，请先安装: https://pandoc.org/installing.html")
 
