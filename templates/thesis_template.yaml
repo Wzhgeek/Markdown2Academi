@@ -1,0 +1,70 @@
+# 毕业论文模板配置
+template_name: thesis
+description: 本科毕业论文模板
+
+# 页面设置
+page:
+  width: 210mm      # A4 宽度
+  height: 297mm     # A4 高度
+  margin_top: 25mm
+  margin_bottom: 25mm
+  margin_left: 30mm
+  margin_right: 30mm
+
+# 字体设置
+fonts:
+  # 中文字体
+  chinese:
+    title: 黑体
+    heading: 黑体
+    body: 宋体
+    code: 宋体
+  # 英文字体
+  english:
+    title: Times New Roman
+    heading: Times New Roman
+    body: Times New Roman
+    code: Courier New
+
+# 字号设置
+font_sizes:
+  chapter_title: 16     # 章标题：三号
+  section_title: 14     # 节标题：四号
+  subsection_title: 12  # 小节标题：小四
+  body: 12              # 正文：小四
+  caption: 10.5         # 图表标题：五号
+  footnote: 9           # 脚注：小五
+
+# 段落设置
+paragraph:
+  line_spacing: 1.5         # 行距
+  first_line_indent: 2em    # 首行缩进
+  paragraph_spacing: 0.5em  # 段间距
+
+# 页眉页脚
+header_footer:
+  header_content: "{school}"  # 页眉内容
+  footer_page_number: true    # 显示页码
+  page_number_format: "1"     # 页码格式
+
+# 封面设置
+cover:
+  show_school_name: true
+  school_name_size: 26
+  show_thesis_type: true
+  thesis_type: 本科毕业论文
+  thesis_type_size: 36
+  title_size: 22
+  info_label_width: 8em
+  info_font_size: 14
+
+# 目录设置
+toc:
+  show_toc: true
+  toc_title: 目录
+  toc_depth: 3
+
+# 参考文献
+bibliography:
+  style: gb7714
+  title: 参考文献

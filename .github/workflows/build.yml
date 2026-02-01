@@ -1,0 +1,211 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # Windows 构建
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-desktop.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "Markdown2Academia" --add-data "src;src" main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-executable
+          path: dist/Markdown2Academia.exe
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/Markdown2Academia.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # macOS 构建 (Intel + Apple Silicon)
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: ${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-desktop.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "Markdown2Academia" --target-arch ${{ matrix.arch }} main.py
+
+      - name: Create .app bundle
+        run: |
+          mkdir -p Markdown2Academia.app/Contents/MacOS
+          mkdir -p Markdown2Academia.app/Contents/Resources
+          cp dist/Markdown2Academia Markdown2Academia.app/Contents/MacOS/
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>Markdown2Academia</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.markdown2academia.app</string>
+              <key>CFBundleName</key>
+              <string>Markdown2Academia</string>
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+          </dict>
+          </plist>' > Markdown2Academia.app/Contents/Info.plist
+
+      - name: Create DMG
+        run: |
+          brew install create-dmg || true
+          create-dmg \
+            --volname "Markdown2Academia" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --app-drop-link 450 185 \
+            "Markdown2Academia-${{ matrix.arch }}.dmg" \
+            Markdown2Academia.app/
+        continue-on-error: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-bundle
+          path: |
+            dist/Markdown2Academia
+            Markdown2Academia-*.dmg
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/Markdown2Academia
+            Markdown2Academia-*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Android 构建
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-mobile.txt
+
+      - name: Install Buildozer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-pip build-essential git \
+            zip unzip openjdk-17-jdk python3-venv
+
+      - name: Install Buildozer
+        run: |
+          pip install buildozer cython
+
+      - name: Cache Buildozer dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('build/android/buildozer.spec') }}
+
+      - name: Build Android APK
+        run: |
+          cd build/android
+          buildozer android debug || echo "Buildozer build may need local debugging"
+        continue-on-error: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/android/bin/*.apk
+        continue-on-error: true
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/android/bin/*.apk
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 创建发布说明
+  create-release-notes:
+    needs: [build-windows, build-macos, build-android]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate Release Notes
+        run: |
+          echo "# Markdown2Academia ${{ github.ref_name }}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 下载" >> RELEASE_NOTES.md
+          echo "- Windows: Markdown2Academia.exe" >> RELEASE_NOTES.md
+          echo "- macOS (Intel): Markdown2Academia-x86_64" >> RELEASE_NOTES.md
+          echo "- macOS (Apple Silicon): Markdown2Academia-arm64" >> RELEASE_NOTES.md
+          echo "- Android: *.apk" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 更新内容" >> RELEASE_NOTES.md
+          git log --oneline $(git describe --tags --abbrev=0 HEAD^)..HEAD >> RELEASE_NOTES.md || true
+
+      - name: Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          append_body: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

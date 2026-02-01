@@ -1,0 +1,60 @@
+# 期刊论文模板配置
+template_name: journal
+description: 学术期刊论文模板
+
+# 页面设置
+page:
+  width: 210mm
+  height: 297mm
+  margin_top: 25mm
+  margin_bottom: 25mm
+  margin_left: 25mm
+  margin_right: 25mm
+
+# 字体设置
+fonts:
+  chinese:
+    title: 黑体
+    heading: 黑体
+    body: 宋体
+    code: 宋体
+  english:
+    title: Times New Roman
+    heading: Times New Roman
+    body: Times New Roman
+    code: Courier New
+
+# 字号设置
+font_sizes:
+  chapter_title: 14
+  section_title: 12
+  subsection_title: 10.5
+  body: 10.5
+  caption: 9
+  footnote: 8
+
+# 段落设置
+paragraph:
+  line_spacing: 2.0
+  first_line_indent: 2em
+  paragraph_spacing: 0em
+
+# 页眉页脚
+header_footer:
+  header_content: ""
+  footer_page_number: true
+  page_number_format: "1"
+
+# 封面设置
+cover:
+  show_school_name: false
+  show_thesis_type: false
+
+# 目录设置
+toc:
+  show_toc: false
+
+# 参考文献
+bibliography:
+  style: gb7714
+  title: References
