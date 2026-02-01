@@ -174,13 +174,20 @@ jobs:
             mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest
             mv cmdline-tools/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/ 2>/dev/null || true
           fi
+          # p4a/buildozer 查找的是旧路径 tools/bin/sdkmanager，现代 SDK 在 cmdline-tools/latest/bin/
+          # 创建符号链接让 p4a 能找到 sdkmanager
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$SDK/tools/bin"
+          ln -sf "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/tools/bin/sdkmanager" 2>/dev/null || true
+          ln -sf "$SDK/cmdline-tools/latest/bin/avdmanager" "$SDK/tools/bin/avdmanager" 2>/dev/null || true
           # Accept all licenses
-          export ANDROID_SDK_ROOT=~/.buildozer/android/platform/android-sdk
-          yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          export ANDROID_SDK_ROOT="$SDK"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
       - name: Build Android APK
         env:
-          ANDROID_SDK_ROOT: ~/.buildozer/android/platform/android-sdk
+          # 使用绝对路径，避免 env 中 ~ 未展开
+          ANDROID_SDK_ROOT: ${{ runner.home }}/.buildozer/android/platform/android-sdk
         run: |
           cd build/android
           buildozer android debug
