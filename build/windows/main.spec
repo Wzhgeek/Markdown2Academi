@@ -2,6 +2,11 @@
 
 block_cipher = None
 
+import sys
+import os
+
+block_cipher = None
+
 a = Analysis(
     ['../../main.py'],
     pathex=['../../src'],
@@ -9,14 +14,22 @@ a = Analysis(
     datas=[
         ('../../src', 'src'),
         ('../../templates', 'templates'),
+        ('../../assets/icons', 'assets/icons'),
     ],
     hiddenimports=[
         'src',
         'src.gui.desktop.main_window',
+        'src.gui.desktop.preview_panel',
+        'src.gui.desktop.table_editor',
+        'src.gui.desktop.icon_manager',
         'src.converters.markdown_to_docx',
         'src.converters.formula_converter',
+        'src.converters.latex_exporter',
         'src.converters.table_converter',
         'src.utils.config',
+        'cairosvg',
+        'PIL',
+        'PIL._tkinter_finder',
     ],
     hookspath=[],
     hooksconfig={},

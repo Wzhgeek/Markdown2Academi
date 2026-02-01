@@ -16,6 +16,9 @@ class PreviewPanel:
     def __init__(self, parent):
         self.parent = parent
         self.frame = ttk.Frame(parent)
+        # 配置 frame 的 grid 权重，使其可以扩展
+        self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(0, weight=1)
 
         # Markdown 转换器
         self.md = markdown.Markdown(extensions=[
@@ -72,6 +75,10 @@ class PreviewPanel:
         self.raw_text.pack_forget()
         self.html_text.pack_forget()
 
+        # 配置 content_frame 的 grid 权重
+        self.content_frame.columnconfigure(0, weight=1)
+        self.content_frame.rowconfigure(0, weight=1)
+
         # 显示选中模式
         if mode == "rich":
             self.rich_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -104,6 +111,7 @@ class PreviewPanel:
         self.raw_text.delete(1.0, tk.END)
         self.raw_text.insert(tk.END, content)
         self.raw_text.config(state=tk.DISABLED)
+        self.raw_text.update()  # 强制刷新显示
 
     def _update_html(self, content: str):
         """更新 HTML 预览"""
@@ -114,6 +122,7 @@ class PreviewPanel:
         self.html_text.delete(1.0, tk.END)
         self.html_text.insert(tk.END, html)
         self.html_text.config(state=tk.DISABLED)
+        self.html_text.update()  # 强制刷新显示
 
     def _update_rich(self, content: str, template: str):
         """更新富文本预览"""
@@ -124,6 +133,7 @@ class PreviewPanel:
         self._render_rich_text(content, template)
 
         self.rich_text.config(state=tk.DISABLED)
+        self.rich_text.update()  # 强制刷新显示
 
     def _render_rich_text(self, content: str, template: str):
         """使用 tkinter Text 渲染富文本"""

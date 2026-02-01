@@ -407,4 +407,4 @@ class JournalLatexTemplate(LatexTemplate):
 {content}
 
 \\end{{document}}
-""
+"""

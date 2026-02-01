@@ -7,6 +7,8 @@ from tkinter import ttk, messagebox, filedialog
 import csv
 import io
 
+from src.gui.desktop.icon_manager import get_icon_manager
+
 
 class TableEditor:
     """表格编辑器对话框"""
@@ -27,17 +29,26 @@ class TableEditor:
 
     def _setup_ui(self):
         """设置界面"""
+        # 初始化图标管理器
+        self.icon_manager = get_icon_manager()
+
         # 工具栏
         toolbar = ttk.Frame(self.dialog)
         toolbar.pack(fill=tk.X, padx=10, pady=5)
 
-        ttk.Button(toolbar, text="➕ 添加行", command=self._add_row).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="➖ 删除行", command=self._remove_row).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="➕ 添加列", command=self._add_col).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="➖ 删除列", command=self._remove_col).pack(side=tk.LEFT, padx=2)
+        self.icon_manager.create_button(toolbar, icon_name="add", text="添加行",
+                                        command=self._add_row, size="small").pack(side=tk.LEFT, padx=2)
+        self.icon_manager.create_button(toolbar, icon_name="minus", text="删除行",
+                                        command=self._remove_row, size="small").pack(side=tk.LEFT, padx=2)
+        self.icon_manager.create_button(toolbar, icon_name="add", text="添加列",
+                                        command=self._add_col, size="small").pack(side=tk.LEFT, padx=2)
+        self.icon_manager.create_button(toolbar, icon_name="minus", text="删除列",
+                                        command=self._remove_col, size="small").pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        ttk.Button(toolbar, text="📂 导入 CSV", command=self._import_csv).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="💾 导出", command=self._show_export_dialog).pack(side=tk.LEFT, padx=2)
+        self.icon_manager.create_button(toolbar, icon_name="upload", text="导入 CSV",
+                                        command=self._import_csv, size="small").pack(side=tk.LEFT, padx=2)
+        self.icon_manager.create_button(toolbar, icon_name="download", text="导出",
+                                        command=self._show_export_dialog, size="small").pack(side=tk.LEFT, padx=2)
 
         # 表格区域
         table_frame = ttk.Frame(self.dialog)
@@ -191,8 +202,9 @@ class TableEditor:
         """显示导出对话框"""
         dialog = tk.Toplevel(self.dialog)
         dialog.title("导出表格")
-        dialog.geometry("400x200")
+        dialog.geometry("400x250")
         dialog.transient(self.dialog)
+        dialog.grab_set()
 
         ttk.Label(dialog, text="选择导出格式:").pack(pady=10)
 

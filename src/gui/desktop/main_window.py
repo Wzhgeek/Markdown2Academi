@@ -11,6 +11,7 @@ from src.converters.markdown_to_docx import MarkdownToDocxConverter
 from src.converters.formula_converter import FormulaConverter
 from src.converters.latex_exporter import LatexExporter
 from src.gui.desktop.preview_panel import PreviewPanel
+from src.gui.desktop.icon_manager import get_icon_manager
 from src.utils.config import Config
 
 
@@ -34,6 +35,9 @@ class MainWindow:
 
         # 当前文件
         self.current_file = None
+
+        # 图标管理器
+        self.icon_manager = get_icon_manager()
 
         self._setup_ui()
         self._setup_menu()
@@ -96,12 +100,32 @@ class MainWindow:
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E))
 
-        ttk.Button(button_frame, text="⚙️ 设置", command=self._open_settings).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="📋 公式识别", command=self._open_formula_tool).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="📊 表格转换", command=self._open_table_tool).pack(side=tk.LEFT, padx=5)
+        # 左侧工具按钮
+        self.icon_manager.create_button(
+            button_frame, icon_name="settings", text="设置",
+            command=self._open_settings, size="small"
+        ).pack(side=tk.LEFT, padx=3)
 
-        ttk.Button(button_frame, text="🔄 刷新预览", command=self._refresh_preview).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="📄 导出文档", command=self._export_document).pack(side=tk.RIGHT, padx=5)
+        self.icon_manager.create_button(
+            button_frame, icon_name="formula", text="公式识别",
+            command=self._open_formula_tool, size="small"
+        ).pack(side=tk.LEFT, padx=3)
+
+        self.icon_manager.create_button(
+            button_frame, icon_name="table", text="表格转换",
+            command=self._open_table_tool, size="small"
+        ).pack(side=tk.LEFT, padx=3)
+
+        # 右侧操作按钮
+        self.icon_manager.create_button(
+            button_frame, icon_name="refresh", text="刷新预览",
+            command=self._refresh_preview, size="small"
+        ).pack(side=tk.RIGHT, padx=3)
+
+        self.icon_manager.create_button(
+            button_frame, icon_name="export", text="导出文档",
+            command=self._export_document, size="small"
+        ).pack(side=tk.RIGHT, padx=3)
 
         # 状态栏
         self.status_var = tk.StringVar(value="就绪")
