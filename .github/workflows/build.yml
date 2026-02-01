@@ -147,7 +147,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             python3-pip build-essential git \
-            zip unzip openjdk-17-jdk python3-venv
+            zip unzip openjdk-17-jdk python3-venv \
+            libncurses5-dev libncursesw5-dev
 
       - name: Install Buildozer
         run: |
@@ -161,7 +162,25 @@ jobs:
             .buildozer
           key: ${{ runner.os }}-buildozer-${{ hashFiles('build/android/buildozer.spec') }}
 
+      - name: Setup Android SDK and accept licenses
+        run: |
+          # Create SDK directory
+          mkdir -p ~/.buildozer/android/platform/android-sdk
+          # Setup command line tools if not exists
+          if [ ! -d ~/.buildozer/android/platform/android-sdk/cmdline-tools ]; then
+            cd /tmp
+            wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+            unzip -q commandlinetools-linux-9477386_latest.zip
+            mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest
+            mv cmdline-tools/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/ 2>/dev/null || true
+          fi
+          # Accept all licenses
+          export ANDROID_SDK_ROOT=~/.buildozer/android/platform/android-sdk
+          yes | ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
       - name: Build Android APK
+        env:
+          ANDROID_SDK_ROOT: ~/.buildozer/android/platform/android-sdk
         run: |
           cd build/android
           buildozer android debug
