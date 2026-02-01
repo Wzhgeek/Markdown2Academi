@@ -185,10 +185,8 @@ jobs:
           yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
       - name: Build Android APK
-        env:
-          # 使用绝对路径，避免 env 中 ~ 未展开
-          ANDROID_SDK_ROOT: ${{ runner.home }}/.buildozer/android/platform/android-sdk
         run: |
+          export ANDROID_SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
           cd build/android
           buildozer android debug
 
