@@ -61,19 +61,27 @@ class LatexExporter:
         # 移除 YAML 元数据
         content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', content, flags=re.DOTALL)
 
-        # 处理 #abstract
-        content = re.sub(r'^#abstract\s*\n', r'\begin{abstract}\n', content, flags=re.MULTILINE)
-        content = re.sub(r'^#abstract-en\s*\n', r'\begin{abstract-en}\n', content, flags=re.MULTILINE)
+        # 处理 #abstract（支持内容在同一行或下一行）
+        def replace_abstract(match):
+            abstract_content = match.group(1).strip()
+            return f'\\begin{{abstract}}\n{abstract_content}\n\\end{{abstract}}'
+
+        def replace_abstract_en(match):
+            abstract_content = match.group(1).strip()
+            return f'\\begin{{abstract-en}}\n{abstract_content}\n\\end{{abstract-en}}'
+
+        content = re.sub(r'^#abstract\s+(.*?)$', replace_abstract, content, flags=re.MULTILINE)
+        content = re.sub(r'^#abstract-en\s+(.*?)$', replace_abstract_en, content, flags=re.MULTILINE)
 
         # 处理 #keywords
         content = re.sub(r'^#keywords\s*(.+)$',
                          r'\\textbf{关键词：}\1', content, flags=re.MULTILINE)
 
         # 处理标题
-        content = re.sub(r'^# (.+)$', r'\chapter{\1}', content, flags=re.MULTILINE)
-        content = re.sub(r'^## (.+)$', r'\section{\1}', content, flags=re.MULTILINE)
-        content = re.sub(r'^### (.+)$', r'\subsection{\1}', content, flags=re.MULTILINE)
-        content = re.sub(r'^#### (.+)$', r'\subsubsection{\1}', content, flags=re.MULTILINE)
+        content = re.sub(r'^# (.+)$', r'\\chapter{\1}', content, flags=re.MULTILINE)
+        content = re.sub(r'^## (.+)$', r'\\section{\1}', content, flags=re.MULTILINE)
+        content = re.sub(r'^### (.+)$', r'\\subsection{\1}', content, flags=re.MULTILINE)
+        content = re.sub(r'^#### (.+)$', r'\\subsubsection{\1}', content, flags=re.MULTILINE)
 
         # 处理公式
         content = self._process_equations(content)
@@ -104,11 +112,12 @@ class LatexExporter:
         content = re.sub(r'^\[\d+\]\s*(.+)$',
                          r'\\bibitem{item} \1', content, flags=re.MULTILINE)
 
-        # 处理换行
-        content = re.sub(r'\n\n+', '\n\n', content)
+        # 处理换行 - 将单个换行转为空格，保留段落间的双换行
+        content = re.sub(r'(?<!\n)\n(?!\n)', ' ', content)
+        content = re.sub(r'\n{3,}', '\n\n', content)
 
-        # 转义特殊字符
-        content = self._escape_latex(content)
+        # 最后转义特殊字符（排除已经在 LaTeX 命令中的）
+        content = self._escape_latex_content(content)
 
         return content.strip()
 
@@ -126,10 +135,10 @@ class LatexExporter:
                          replace_equation, content, flags=re.MULTILINE)
 
         # 处理行内公式 $...$
-        content = re.sub(r'\$([^$]+)\$', r'\\(\1\\)', content)
+        content = re.sub(r'\$([^$]+)\$', r'$\1$', content)
 
         # 处理块级公式 $$...$$
-        content = re.sub(r'\$\$(.+?)\$\$', r'\\[\1\\]', content, flags=re.DOTALL)
+        content = re.sub(r'\$\$(.+?)\$\$', r'$$\1$$', content, flags=re.DOTALL)
 
         return content
 
@@ -192,29 +201,33 @@ class LatexExporter:
                 if not in_itemize:
                     if in_enumerate:
                         result.append('\\end{enumerate}')
+                        result.append('')
                         in_enumerate = False
                     result.append('\\begin{itemize}')
                     in_itemize = True
                 item_text = re.sub(r'^[\s]*[-*]\s+', '', line)
-                result.append(f'\\item {item_text}')
+                result.append(f'    \\item {item_text}')
 
             # 有序列表
             elif re.match(r'^[\s]*\d+\.\s+', line):
                 if not in_enumerate:
                     if in_itemize:
                         result.append('\\end{itemize}')
+                        result.append('')
                         in_itemize = False
                     result.append('\\begin{enumerate}')
                     in_enumerate = True
                 item_text = re.sub(r'^[\s]*\d+\.\s+', '', line)
-                result.append(f'\\item {item_text}')
+                result.append(f'    \\item {item_text}')
 
             else:
                 if in_itemize:
                     result.append('\\end{itemize}')
+                    result.append('')
                     in_itemize = False
                 if in_enumerate:
                     result.append('\\end{enumerate}')
+                    result.append('')
                     in_enumerate = False
                 result.append(line)
 
@@ -225,9 +238,11 @@ class LatexExporter:
 
         return '\n'.join(result)
 
-    def _escape_latex(self, text: str) -> str:
-        """转义 LaTeX 特殊字符"""
-        # 注意：不要转义已经在 LaTeX 命令中的字符
+    def _escape_latex_content(self, text: str) -> str:
+        """转义 LaTeX 特殊字符（在内容处理后调用）"""
+        import re
+
+        # 定义需要转义的特殊字符（排除数学模式中的字符）
         special_chars = {
             '&': r'\&',
             '%': r'\%',
@@ -237,12 +252,28 @@ class LatexExporter:
             '{': r'\{',
             '}': r'\}',
             '~': r'\textasciitilde{}',
-            '^': r'\textasciicircum{}',
         }
 
-        # 简单的替换，实际应该更复杂地处理
+        # 使用占位符保护现有的 LaTeX 命令和环境
+        placeholders = []
+
+        def protect_latex_commands(match):
+            placeholders.append(match.group(0))
+            return f"\x00PLACEHOLDER{len(placeholders)-1}\x00"
+
+        # 保护 equation 环境（不转义内部的 ^ 和 _）
+        text = re.sub(r'\\begin\{equation\}.*?\\end\{equation\}', protect_latex_commands, text, flags=re.DOTALL)
+
+        # 保护其他 LaTeX 命令
+        text = re.sub(r'\\[a-zA-Z]+(\[[^\]]*\])?(\{[^}]*\})?', protect_latex_commands, text)
+
+        # 转义特殊字符（不包括 ^，因为数学模式中需要它）
         for char, replacement in special_chars.items():
             text = text.replace(char, replacement)
+
+        # 恢复 LaTeX 命令和环境
+        for i, placeholder in enumerate(placeholders):
+            text = text.replace(f"\x00PLACEHOLDER{i}\x00", placeholder)
 
         return text
 

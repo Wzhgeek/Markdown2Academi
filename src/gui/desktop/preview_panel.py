@@ -1,92 +1,108 @@
 """
 Markdown 实时渲染预览面板
-支持富文本渲染和 HTML 显示
+左右分栏：左边编辑 Markdown，右边实时预览
 """
 
 import tkinter as tk
-from tkinter import ttk, scrolledtext
-import markdown
-from markdown.extensions import fenced_code, tables, toc
+from tkinter import ttk
 import re
 
 
 class PreviewPanel:
-    """Markdown 预览面板"""
+    """Markdown 预览面板 - 左右分栏"""
 
     def __init__(self, parent):
         self.parent = parent
         self.frame = ttk.Frame(parent)
-        # 配置 frame 的 grid 权重，使其可以扩展
+
+        # 配置 frame 的 grid 权重
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
 
-        # Markdown 转换器
-        self.md = markdown.Markdown(extensions=[
-            'fenced_code',
-            'tables',
-            'toc',
-            'nl2br',
-        ])
+        # 当前模板
+        self.current_template = "thesis"
 
         self._setup_ui()
 
     def _setup_ui(self):
-        """设置界面"""
-        # 预览模式选择
-        mode_frame = ttk.Frame(self.frame)
-        mode_frame.pack(fill=tk.X, pady=(0, 5))
+        """设置界面 - 左右分栏"""
+        # 使用 PanedWindow 实现可拖拽分栏
+        self.paned = tk.PanedWindow(self.frame, orient=tk.HORIZONTAL)
+        self.paned.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Label(mode_frame, text="预览模式:").pack(side=tk.LEFT, padx=(0, 5))
-        self.preview_mode = tk.StringVar(value="rich")
-        ttk.Radiobutton(mode_frame, text="富文本", variable=self.preview_mode,
-                        value="rich", command=self._switch_mode).pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(mode_frame, text="原始文本", variable=self.preview_mode,
-                        value="raw", command=self._switch_mode).pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(mode_frame, text="HTML", variable=self.preview_mode,
-                        value="html", command=self._switch_mode).pack(side=tk.LEFT, padx=5)
+        # ===== 左侧：Markdown 编辑器 =====
+        left_frame = ttk.LabelFrame(self.paned, text="Markdown 源码")
+        left_frame.columnconfigure(0, weight=1)
+        left_frame.rowconfigure(0, weight=1)
 
-        # 内容区域
-        self.content_frame = ttk.Frame(self.frame)
-        self.content_frame.pack(fill=tk.BOTH, expand=True)
+        self.source_text = tk.Text(
+            left_frame,
+            wrap=tk.WORD,
+            font=('Monaco', 11) if self._is_macos() else ('Consolas', 10),
+            bg='#fafafa',
+            fg='#333333',
+            padx=10,
+            pady=10,
+            undo=True,
+            maxundo=-1
+        )
+        self.source_text.grid(row=0, column=0, sticky="nsew")
 
-        # 富文本预览
-        self.rich_text = tk.Text(self.content_frame, wrap=tk.WORD, state=tk.DISABLED,
-                                 bg='white', padx=10, pady=10)
-        self.rich_text_scroll = ttk.Scrollbar(self.content_frame, command=self.rich_text.yview)
-        self.rich_text.configure(yscrollcommand=self.rich_text_scroll.set)
+        # 滚动条
+        source_scroll = ttk.Scrollbar(left_frame, command=self.source_text.yview)
+        source_scroll.grid(row=0, column=1, sticky="ns")
+        self.source_text.configure(yscrollcommand=source_scroll.set)
 
-        # 原始文本预览
-        self.raw_text = scrolledtext.ScrolledText(self.content_frame, wrap=tk.WORD, state=tk.DISABLED)
+        # ===== 右侧：渲染预览 =====
+        right_frame = ttk.LabelFrame(self.paned, text="实时预览")
+        right_frame.columnconfigure(0, weight=1)
+        right_frame.rowconfigure(0, weight=1)
 
-        # HTML 预览
-        self.html_text = scrolledtext.ScrolledText(self.content_frame, wrap=tk.WORD, state=tk.DISABLED,
-                                                   font=('Courier', 10))
+        # 根据系统和模板设置字体
+        if self._is_macos():
+            preview_font = ('PingFang SC', 12)  # macOS 使用苹方字体
+        else:
+            preview_font = ('Microsoft YaHei', 11)  # Windows 使用微软雅黑
 
-        # 显示当前模式
-        self._switch_mode()
+        self.preview_text = tk.Text(
+            right_frame,
+            wrap=tk.WORD,
+            state=tk.DISABLED,
+            bg='white',
+            padx=10,
+            pady=10,
+            cursor='arrow',
+            font=preview_font
+        )
+        self.preview_text.grid(row=0, column=0, sticky="nsew")
 
-    def _switch_mode(self):
-        """切换预览模式"""
-        mode = self.preview_mode.get()
+        # 滚动条
+        preview_scroll = ttk.Scrollbar(right_frame, command=self.preview_text.yview)
+        preview_scroll.grid(row=0, column=1, sticky="ns")
+        self.preview_text.configure(yscrollcommand=preview_scroll.set)
 
-        # 隐藏所有
-        self.rich_text.pack_forget()
-        self.rich_text_scroll.pack_forget()
-        self.raw_text.pack_forget()
-        self.html_text.pack_forget()
+        # 添加到 PanedWindow
+        self.paned.add(left_frame, minsize=300)
+        self.paned.add(right_frame, minsize=300)
 
-        # 配置 content_frame 的 grid 权重
-        self.content_frame.columnconfigure(0, weight=1)
-        self.content_frame.rowconfigure(0, weight=1)
+        # 设置默认分割比例
+        self.paned.sash_place(0, 450, 0)
 
-        # 显示选中模式
-        if mode == "rich":
-            self.rich_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            self.rich_text_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        elif mode == "raw":
-            self.raw_text.pack(fill=tk.BOTH, expand=True)
-        else:  # html
-            self.html_text.pack(fill=tk.BOTH, expand=True)
+        # 绑定编辑事件 - 使用 after 延迟更新避免频繁刷新
+        self._update_pending = None
+        self.source_text.bind('<KeyRelease>', self._schedule_update)
+        self.source_text.bind('<ButtonRelease>', self._schedule_update)
+
+    def _is_macos(self) -> bool:
+        """检测是否为 macOS"""
+        import platform
+        return platform.system() == 'Darwin'
+
+    def _schedule_update(self, event=None):
+        """延迟更新预览"""
+        if self._update_pending:
+            self.frame.after_cancel(self._update_pending)
+        self._update_pending = self.frame.after(100, self._update_preview)
 
     def update_preview(self, md_content: str, template: str = "thesis"):
         """
@@ -96,47 +112,33 @@ class PreviewPanel:
             md_content: Markdown 内容
             template: 模板名称，影响渲染样式
         """
-        mode = self.preview_mode.get()
+        self.current_template = template
 
-        if mode == "raw":
-            self._update_raw(md_content)
-        elif mode == "html":
-            self._update_html(md_content)
+        # 更新左侧源码
+        self.source_text.delete(1.0, tk.END)
+        self.source_text.insert(1.0, md_content)
+
+        # 强制立即更新右侧预览
+        self.frame.update_idletasks()
+        self._update_preview()
+
+    def _update_preview(self):
+        """更新右侧渲染预览"""
+        content = self.source_text.get(1.0, tk.END).strip()
+
+        self.preview_text.config(state=tk.NORMAL)
+        self.preview_text.delete(1.0, tk.END)
+
+        if content and content != "请选择或拖拽 Markdown 文件...":
+            # 渲染 Markdown
+            self._render_markdown(content, self.current_template)
         else:
-            self._update_rich(md_content, template)
+            self.preview_text.insert(tk.END, "请在左侧编辑 Markdown 内容...", 'body')
 
-    def _update_raw(self, content: str):
-        """更新原始文本预览"""
-        self.raw_text.config(state=tk.NORMAL)
-        self.raw_text.delete(1.0, tk.END)
-        self.raw_text.insert(tk.END, content)
-        self.raw_text.config(state=tk.DISABLED)
-        self.raw_text.update()  # 强制刷新显示
+        self.preview_text.config(state=tk.DISABLED)
 
-    def _update_html(self, content: str):
-        """更新 HTML 预览"""
-        self.md.reset()
-        html = self.md.convert(content)
-
-        self.html_text.config(state=tk.NORMAL)
-        self.html_text.delete(1.0, tk.END)
-        self.html_text.insert(tk.END, html)
-        self.html_text.config(state=tk.DISABLED)
-        self.html_text.update()  # 强制刷新显示
-
-    def _update_rich(self, content: str, template: str):
-        """更新富文本预览"""
-        self.rich_text.config(state=tk.NORMAL)
-        self.rich_text.delete(1.0, tk.END)
-
-        # 解析并渲染 Markdown
-        self._render_rich_text(content, template)
-
-        self.rich_text.config(state=tk.DISABLED)
-        self.rich_text.update()  # 强制刷新显示
-
-    def _render_rich_text(self, content: str, template: str):
-        """使用 tkinter Text 渲染富文本"""
+    def _render_markdown(self, content: str, template: str):
+        """渲染 Markdown 为富文本"""
         # 配置标签样式
         self._configure_tags(template)
 
@@ -175,43 +177,59 @@ class PreviewPanel:
             elif line.strip():
                 self._insert_paragraph(line)
             else:
-                self.rich_text.insert(tk.END, '\n')
+                self.preview_text.insert(tk.END, '\n')
 
             i += 1
 
     def _configure_tags(self, template: str):
         """配置文本标签样式"""
-        # 根据模板设置字体
-        if template == "thesis":
-            title_font = ('黑体', 16, 'bold')
-            h1_font = ('黑体', 14, 'bold')
-            h2_font = ('黑体', 12, 'bold')
-            h3_font = ('黑体', 11, 'bold')
-            body_font = ('宋体', 12)
-        else:  # journal
-            title_font = ('Times New Roman', 14, 'bold')
-            h1_font = ('Times New Roman', 12, 'bold')
-            h2_font = ('Times New Roman', 11, 'bold')
-            h3_font = ('Times New Roman', 10, 'bold')
-            body_font = ('Times New Roman', 10)
+        # 根据系统和模板设置字体
+        if self._is_macos():
+            # macOS 字体
+            if template == "thesis":
+                h1_font = ('PingFang SC', 18, 'bold')
+                h2_font = ('PingFang SC', 15, 'bold')
+                h3_font = ('PingFang SC', 13, 'bold')
+                h4_font = ('PingFang SC', 12, 'bold')
+                body_font = ('PingFang SC', 12)
+            else:  # journal
+                h1_font = ('Times New Roman', 14, 'bold')
+                h2_font = ('Times New Roman', 12, 'bold')
+                h3_font = ('Times New Roman', 11, 'bold')
+                h4_font = ('Times New Roman', 11, 'bold')
+                body_font = ('Times New Roman', 11)
+        else:
+            # Windows/Linux 字体
+            if template == "thesis":
+                h1_font = ('Microsoft YaHei', 16, 'bold')
+                h2_font = ('Microsoft YaHei', 14, 'bold')
+                h3_font = ('Microsoft YaHei', 12, 'bold')
+                h4_font = ('Microsoft YaHei', 11, 'bold')
+                body_font = ('Microsoft YaHei', 11)
+            else:  # journal
+                h1_font = ('Times New Roman', 14, 'bold')
+                h2_font = ('Times New Roman', 12, 'bold')
+                h3_font = ('Times New Roman', 11, 'bold')
+                h4_font = ('Times New Roman', 11, 'bold')
+                body_font = ('Times New Roman', 11)
 
-        self.rich_text.tag_configure('h1', font=h1_font, spacing3=10)
-        self.rich_text.tag_configure('h2', font=h2_font, spacing3=8)
-        self.rich_text.tag_configure('h3', font=h3_font, spacing3=6)
-        self.rich_text.tag_configure('h4', font=body_font, underline=True)
-        self.rich_text.tag_configure('bold', font=(body_font[0], body_font[1], 'bold'))
-        self.rich_text.tag_configure('italic', font=(body_font[0], body_font[1], 'italic'))
-        self.rich_text.tag_configure('code', font=('Courier', body_font[1]),
-                                     background='#f0f0f0')
-        self.rich_text.tag_configure('code_block', font=('Courier', body_font[1] - 1),
-                                     background='#f5f5f5', spacing1=5, spacing3=5)
-        self.rich_text.tag_configure('center', justify='center')
-        self.rich_text.tag_configure('abstract_title', font=h1_font, justify='center')
-        self.rich_text.tag_configure('abstract_content', font=body_font,
-                                     spacing1=5, spacing3=5, lmargin1=20, lmargin2=20)
-        self.rich_text.tag_configure('keywords', font=body_font, spacing3=10)
-        self.rich_text.tag_configure('equation', font=('Courier', body_font[1] + 2),
-                                     justify='center', spacing1=5, spacing3=5)
+        # 配置文本颜色
+        text_color = '#333333'
+
+        self.preview_text.tag_configure('h1', font=h1_font, spacing3=10, foreground=text_color)
+        self.preview_text.tag_configure('h2', font=h2_font, spacing3=8, foreground=text_color)
+        self.preview_text.tag_configure('h3', font=h3_font, spacing3=6, foreground=text_color)
+        self.preview_text.tag_configure('h4', font=h4_font, spacing3=4, foreground=text_color)
+        self.preview_text.tag_configure('body', font=body_font, foreground=text_color)
+        self.preview_text.tag_configure('bold', font=(body_font[0], body_font[1], 'bold'), foreground=text_color)
+        self.preview_text.tag_configure('italic', font=(body_font[0], body_font[1], 'italic'), foreground=text_color)
+        self.preview_text.tag_configure('code', font=('Courier', body_font[1]),
+                                        background='#f0f0f0', foreground=text_color)
+        self.preview_text.tag_configure('code_block', font=('Courier', body_font[1] - 1),
+                                        background='#f5f5f5', spacing1=5, spacing3=5, foreground=text_color)
+        self.preview_text.tag_configure('center', justify='center', foreground=text_color)
+        self.preview_text.tag_configure('bullet', font=body_font, foreground=text_color)
+        self.preview_text.tag_configure('numbered', font=body_font, foreground=text_color)
 
     def _preprocess_extended_syntax(self, content: str) -> str:
         """预处理扩展语法"""
@@ -249,39 +267,33 @@ class PreviewPanel:
     def _insert_heading(self, text: str, level: int):
         """插入标题"""
         tag = f'h{level}'
-        self.rich_text.insert(tk.END, text + '\n', tag)
-        self.rich_text.insert(tk.END, '\n')
+        self.preview_text.insert(tk.END, text + '\n', tag)
+        self.preview_text.insert(tk.END, '\n')
 
     def _insert_paragraph(self, text: str):
         """插入段落（支持行内格式）"""
-        # 处理行内格式
-        self._insert_with_inline_format(text)
-        self.rich_text.insert(tk.END, '\n\n')
+        self._insert_with_inline_format(text, 'body')
+        self.preview_text.insert(tk.END, '\n\n', 'body')
 
-    def _insert_with_inline_format(self, text: str):
+    def _insert_with_inline_format(self, text: str, default_tag: str = 'body'):
         """插入带行内格式的文本"""
         # 解析粗体和斜体
         parts = re.split(r'(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)', text)
 
         for part in parts:
             if part.startswith('***') and part.endswith('***'):
-                # 粗斜体
-                self.rich_text.insert(tk.END, part[3:-3], ('bold', 'italic'))
+                self.preview_text.insert(tk.END, part[3:-3], ('bold', 'italic'))
             elif part.startswith('**') and part.endswith('**'):
-                # 粗体
-                self.rich_text.insert(tk.END, part[2:-2], 'bold')
+                self.preview_text.insert(tk.END, part[2:-2], 'bold')
             elif part.startswith('*') and part.endswith('*'):
-                # 斜体
-                self.rich_text.insert(tk.END, part[1:-1], 'italic')
+                self.preview_text.insert(tk.END, part[1:-1], 'italic')
             elif part.startswith('`') and part.endswith('`'):
-                # 行内代码
-                self.rich_text.insert(tk.END, part[1:-1], 'code')
+                self.preview_text.insert(tk.END, part[1:-1], 'code')
             else:
-                self.rich_text.insert(tk.END, part)
+                self.preview_text.insert(tk.END, part, default_tag)
 
     def _insert_code_block(self, lines: list, start_idx: int) -> int:
-        """插入代码块，返回结束行索引"""
-        lang = lines[start_idx][3:].strip()
+        """插入代码块"""
         i = start_idx + 1
         code_lines = []
 
@@ -290,53 +302,54 @@ class PreviewPanel:
             i += 1
 
         code = '\n'.join(code_lines)
-        self.rich_text.insert(tk.END, code + '\n', 'code_block')
-        self.rich_text.insert(tk.END, '\n')
+        self.preview_text.insert(tk.END, code + '\n', 'code_block')
+        self.preview_text.insert(tk.END, '\n', 'body')
 
         return i + 1
 
     def _insert_table(self, lines: list, start_idx: int) -> int:
-        """插入表格，返回结束行索引"""
+        """插入表格"""
         i = start_idx
         rows = []
 
-        # 收集表格行
         while i < len(lines) and '|' in lines[i]:
             rows.append(lines[i])
             i += 1
 
-        # 渲染表格（简化版）
         for j, row in enumerate(rows):
             if '---' in row:
-                continue  # 跳过分隔线
+                continue
 
             cells = [cell.strip() for cell in row.split('|') if cell.strip()]
             row_text = ' | '.join(cells)
 
             if j == 0:
-                # 表头
-                self.rich_text.insert(tk.END, row_text + '\n', 'bold')
-                self.rich_text.insert(tk.END, '-' * len(row_text) + '\n')
+                self.preview_text.insert(tk.END, row_text + '\n', 'bold')
+                self.preview_text.insert(tk.END, '-' * len(row_text) + '\n', 'body')
             else:
-                self.rich_text.insert(tk.END, row_text + '\n')
+                self.preview_text.insert(tk.END, row_text + '\n', 'body')
 
-        self.rich_text.insert(tk.END, '\n')
+        self.preview_text.insert(tk.END, '\n', 'body')
         return i
 
     def _insert_bullet(self, text: str):
         """插入无序列表项"""
-        self.rich_text.insert(tk.END, '• ')
-        self._insert_with_inline_format(text)
-        self.rich_text.insert(tk.END, '\n')
+        self.preview_text.insert(tk.END, '• ', 'bullet')
+        self._insert_with_inline_format(text, 'bullet')
+        self.preview_text.insert(tk.END, '\n', 'bullet')
 
     def _insert_numbered(self, text: str):
         """插入有序列表项"""
-        self._insert_with_inline_format(text)
-        self.rich_text.insert(tk.END, '\n')
+        self._insert_with_inline_format(text, 'numbered')
+        self.preview_text.insert(tk.END, '\n', 'numbered')
+
+    def get_content(self) -> str:
+        """获取当前 Markdown 内容"""
+        return self.source_text.get(1.0, tk.END)
 
     def clear(self):
         """清空预览"""
-        for widget in [self.rich_text, self.raw_text, self.html_text]:
-            widget.config(state=tk.NORMAL)
-            widget.delete(1.0, tk.END)
-            widget.config(state=tk.DISABLED)
+        self.source_text.delete(1.0, tk.END)
+        self.preview_text.config(state=tk.NORMAL)
+        self.preview_text.delete(1.0, tk.END)
+        self.preview_text.config(state=tk.DISABLED)

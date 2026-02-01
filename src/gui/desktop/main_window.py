@@ -261,15 +261,8 @@ English abstract here...
 
     def _export_document(self):
         """导出文档"""
-        # 获取 Markdown 内容
-        md_content = None
-        if self.current_file and os.path.exists(self.current_file):
-            try:
-                with open(self.current_file, 'r', encoding='utf-8') as f:
-                    md_content = f.read()
-            except Exception as e:
-                messagebox.showerror("错误", f"无法读取文件: {e}")
-                return
+        # 从左侧面板编辑器获取 Markdown 内容
+        md_content = self.preview_panel.get_content().strip()
 
         if not md_content:
             messagebox.showwarning("提示", "请先打开或创建一个 Markdown 文件")
@@ -306,8 +299,11 @@ English abstract here...
             if output_format == "latex":
                 # 使用 LaTeX 导出器
                 self.latex_exporter.export(md_content, output_file, template=template)
+            elif output_format == "pdf":
+                # PDF 导出（通过 Pandoc 直接生成）
+                self._export_pdf(md_content, output_file, template)
             else:
-                # Word/PDF 导出（通过 Pandoc）
+                # Word 导出（通过 Pandoc）
                 import tempfile
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
                     f.write(md_content)
@@ -333,6 +329,39 @@ English abstract here...
         """导出错误"""
         self.status_var.set("导出失败")
         messagebox.showerror("转换错误", f"导出失败:\n{error_msg}")
+
+    def _export_pdf(self, md_content: str, output_file: str, template: str):
+        """导出 PDF（使用 Pandoc 直接生成）"""
+        import tempfile
+        import subprocess
+        import os
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+            f.write(md_content)
+            temp_md = f.name
+
+        try:
+            # 使用 pandoc 直接生成 PDF
+            cmd = [
+                'pandoc',
+                temp_md,
+                '-o', output_file,
+                '--from', 'markdown+yaml_metadata_block',
+                '--to', 'pdf',
+                '--pdf-engine', 'xelatex',  # 使用 xelatex 支持中文
+                '-V', 'CJKmainfont=PingFang SC',  # macOS 中文字体
+                '-V', 'geometry:margin=2.5cm',
+            ]
+
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else "Pandoc PDF 转换失败"
+            raise RuntimeError(f"PDF 导出失败: {error_msg}")
+        except FileNotFoundError:
+            raise RuntimeError("未找到 pandoc 或 xelatex，请先安装: https://pandoc.org/installing.html")
+        finally:
+            if os.path.exists(temp_md):
+                os.unlink(temp_md)
 
     def _open_file(self, file_path):
         """打开文件"""
