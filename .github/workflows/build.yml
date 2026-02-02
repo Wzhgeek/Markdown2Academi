@@ -191,9 +191,13 @@ jobs:
         run: |
           export ANDROID_SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
           cd build/android
-          buildozer android debug 2>&1 | tee build.log || {
-            echo "=== Build failed, showing last 200 lines of log ==="
-            tail -200 build.log
+          # Run buildozer with verbose output
+          buildozer -v android debug 2>&1 | tee build.log || {
+            echo "=== Build failed, showing last 500 lines of log ==="
+            tail -500 build.log
+            echo ""
+            echo "=== Searching for error patterns ==="
+            grep -i "error\|failed\|exception" build.log | tail -50 || true
             exit 1
           }
 
