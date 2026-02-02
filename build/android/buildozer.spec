@@ -7,7 +7,7 @@ source.include_exts = py,kv,md,txt,csv,yaml,yml
 data = ../../src:src,../../assets:assets,../../templates:templates
 version = 0.1.0
 
-requirements = python3,kivy==2.2.1,requests,pyyaml,markdown,openpyxl,pandas,pillow,charset-normalizer
+requirements = python3,kivy,requests,pyyaml
 
 orientation = portrait
 fullscreen = 0
